@@ -114,7 +114,8 @@ public:
                         length = co_await boost::asio::async_read(socket_, boost::asio::buffer(buf), token);
                         assert(length == 4 + port_length);
                         std::uint32_t n_ip = 0;
-                        std::memcpy(&n_ip, buf.data(), 4);
+                        static_assert(sizeof(std::uint32_t) == 4);
+                        std::memcpy(&n_ip, buf.data(), sizeof n_ip);
                         boost::endian::big_to_native_inplace(n_ip);
                         boost::asio::ip::address_v4 ipv4{n_ip};
 
@@ -207,8 +208,8 @@ public:
                     std::uint16_t port = target_socket_.remote_endpoint().port();
                     boost::endian::native_to_big_inplace(port);
 
-                    std::memcpy(&response[4], &ip, 4);
-                    std::memcpy(&response[8], &port, 2);
+                    std::memcpy(&response[4], &ip,   sizeof ip);
+                    std::memcpy(&response[8], &port, sizeof port);
                 }
                 catch (boost::system::system_error const & e)
                 {
