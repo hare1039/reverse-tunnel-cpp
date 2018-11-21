@@ -7,19 +7,24 @@
 #include <deque>
 #include <string_view>
 #include "basic.hpp"
+#include "bridge.hpp"
 
 namespace pika::socks5
 {
 
 class session : public std::enable_shared_from_this<session>
 {
-    lib::tcp::socket socket_;
-    lib::tcp::socket target_socket_;
-
+    boost::asio::io_context &io_;
+    std::shared_ptr<bridge> bridge_;
+    lib::tcp::socket& socket_;
+    lib::tcp::socket& target_socket_;
 public:
     session(lib::tcp::socket && client):
-        socket_{std::move(client)},
-        target_socket_{socket_.get_executor().context()}{}
+        io_{client.get_executor().context()},
+        bridge_{std::make_shared<bridge>(std::move(client),
+                                         lib::tcp::socket{io_})},
+        socket_{bridge_->first_socket_},
+        target_socket_{bridge_->second_socket_} {}
 
     lib::awaitable<void> start()
     {
@@ -30,7 +35,7 @@ public:
             auto executor = co_await lib::this_coro::executor();
 
             BOOST_SCOPE_EXIT (self) {
-                std::cout << "close session #" << self->id() << std::endl;
+                std::cout << "socks5 session #" << self->id() << " closed" << std::endl;
             } BOOST_SCOPE_EXIT_END;
 
             { // socks5 handshake
@@ -159,7 +164,7 @@ public:
                     default:
                         throw std::runtime_error("ATYP not supported");
                 }
-                std::cout << "target endpoint: " << target_endpoint << "\n";
+                std::cout << "socks5 session #" << self->id() << " started with target endpoint: " << target_endpoint << "\n";
 
             } // socks5 request end
 
@@ -230,47 +235,12 @@ public:
                 std::ignore = co_await boost::asio::async_write(socket_, boost::asio::buffer(response), token);
             } // response of socks5 request end
 
-            lib::co_spawn(executor, [self]() mutable {
-                              return self->redir(self->socket_, self->target_socket_);
-                          }, lib::detached);
-            auto && stoc = self->redir(self->target_socket_, self->socket_);
-
-            std::cout << "setup session #" << self->id() << std::endl;
-            co_await stoc;
+            co_await self->bridge_->start_transport();
         }
         catch (const std::exception & e)
         {
             std::cerr << "session::start() exception: " << e.what() << std::endl;
         }
-        co_return;
-    }
-
-    lib::awaitable<void> redir(lib::tcp::socket &from, lib::tcp::socket &to)
-    {
-        auto executor = co_await lib::this_coro::executor();
-        auto token    = co_await lib::this_coro::token();
-        auto self     = shared_from_this();
-        try
-        {
-            std::array<char, def::bufsize> raw_buf;
-            for (;;)
-            {
-                std::size_t read_n = co_await from.async_read_some(boost::asio::buffer(raw_buf), token);
-                std::ignore = co_await boost::asio::async_write(to, boost::asio::buffer(raw_buf, read_n), token);
-            }
-        }
-        catch (const boost::system::system_error & e)
-        {
-            if (e.code() != boost::asio::error::eof)
-                std::cerr << "session::redir() exception: " << e.what() << std::endl;
-        }
-        catch (const std::exception &e)
-        {
-            std::cerr << "session::redir() std exception: " << e.what() << std::endl;
-        }
-        boost::system::error_code ec;
-        from.shutdown(lib::tcp::socket::shutdown_receive, ec);
-        to.shutdown(lib::tcp::socket::shutdown_send, ec);
         co_return;
     }
 
