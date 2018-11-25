@@ -237,7 +237,7 @@ public:
 
             co_await self->bridge_->start_transport();
         }
-        catch (const std::exception & e)
+        catch (std::exception const & e)
         {
             std::cerr << "session::start() exception: " << e.what() << std::endl;
         }

@@ -44,12 +44,12 @@ private:
                 std::ignore = co_await boost::asio::async_write(to, boost::asio::buffer(raw_buf, read_n), token);
             }
         }
-        catch (const boost::system::system_error & e)
+        catch (boost::system::system_error const & e)
         {
             if (e.code() != boost::asio::error::eof)
                 std::cerr << "bridge::redir() exception: " << e.what() << std::endl;
         }
-        catch (const std::exception &e)
+        catch (std::exception const &e)
         {
             std::cerr << "bridge::redir() std exception: " << e.what() << std::endl;
         }
