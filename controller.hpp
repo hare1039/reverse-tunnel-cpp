@@ -26,50 +26,61 @@ public:
         for (;;)
         {
             lib::tcp::socket socket = co_await acceptor.async_accept(token);
-            std::array<std::uint8_t, 8> buf;
-            std::size_t length = co_await boost::asio::async_read(socket, boost::asio::buffer(buf), token);
-            assert(length == 8);
-
-            switch(buf.at(0))
-            {
-                case 0x00: // do nothing
-                    break;
-                case 0x01: // Request bind port
-                {
-                    std::uint32_t ipv4 = 0;
-                    std::memcpy(&ipv4, &buf[2], sizeof ipv4);
-                    boost::endian::big_to_native_inplace(ipv4);
-
-                    std::uint16_t port = 0;
-                    std::memcpy(&port, &buf[2 + sizeof ipv4], sizeof port);
-                    boost::endian::big_to_native_inplace(port);
-
-                    lib::co_spawn(executor,
-                                  [socket = std::move(socket), ipv4, port, this]() mutable {
-                                      boost::asio::socket_base::keep_alive opt{true};
-                                      socket.set_option(opt);
-                                      return start_reverse_tunnel(std::move(socket), ipv4, port);
-                                  }, lib::detached);
-                    break;
-                }
-                case 0x02: // Connect with id
-                {
-                    std::uint32_t id = 0;
-                    std::memcpy(&id, &buf[2], sizeof id);
-                    boost::endian::big_to_native_inplace(id);
-                    lib::co_spawn(executor,
-                                  [socket = std::move(socket), id, this]() mutable {
-                                      return start_bridge(std::move(socket), id);
-                                  }, lib::detached);
-                    break;
-                }
-                default:
-                    // response failed
-                    break;
-            }
+            lib::co_spawn(executor,
+                          [socket = std::move(socket), this]() mutable {
+                              return init_session(std::move(socket));
+                          }, lib::detached);
         }
     }
 private:
+    lib::awaitable<void> init_session(lib::tcp::socket && socket)
+    {
+        auto executor = co_await lib::this_coro::executor();
+        auto token    = co_await lib::this_coro::token();
+
+        std::array<std::uint8_t, 8> buf;
+        std::size_t length = co_await boost::asio::async_read(socket, boost::asio::buffer(buf), token);
+        assert(length == 8);
+
+        switch(buf.at(0))
+        {
+            case 0x00: // do nothing
+                break;
+            case 0x01: // Request bind port
+            {
+                std::uint32_t ipv4 = 0;
+                std::memcpy(&ipv4, &buf[2], sizeof ipv4);
+                boost::endian::big_to_native_inplace(ipv4);
+
+                std::uint16_t port = 0;
+                std::memcpy(&port, &buf[2 + sizeof ipv4], sizeof port);
+                boost::endian::big_to_native_inplace(port);
+
+                lib::co_spawn(executor,
+                              [socket = std::move(socket), ipv4, port, this]() mutable {
+                                  boost::asio::socket_base::keep_alive opt{true};
+                                  socket.set_option(opt);
+                                  return start_reverse_tunnel(std::move(socket), ipv4, port);
+                              }, lib::detached);
+                break;
+            }
+            case 0x02: // Connect with id
+            {
+                std::uint32_t id = 0;
+                std::memcpy(&id, &buf[2], sizeof id);
+                boost::endian::big_to_native_inplace(id);
+                lib::co_spawn(executor,
+                              [socket = std::move(socket), id, this]() mutable {
+                                  return start_bridge(std::move(socket), id);
+                              }, lib::detached);
+                break;
+            }
+            default:
+                // response failed
+                break;
+        }
+    }
+
     lib::awaitable<void> start_reverse_tunnel(lib::tcp::socket && remote_socket,
                                               std::uint32_t ip, std::uint16_t port)
     {
