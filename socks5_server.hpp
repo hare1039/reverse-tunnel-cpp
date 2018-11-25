@@ -24,7 +24,7 @@ public:
         auto token    = co_await lib::this_coro::token();
 
         lib::tcp::acceptor acceptor(executor.context(), {lib::tcp::v4(), listen_port_});
-        std::cout << "start listining on " << listen_port_ << "\n";
+        std::cout << "socks5 server start listining on " << listen_port_ << "\n";
         for (;;)
         {
             lib::tcp::socket socket = co_await acceptor.async_accept(token);
