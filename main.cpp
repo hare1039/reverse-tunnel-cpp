@@ -14,9 +14,9 @@ int main(int argc, char *argv[])
             exp
         };
         mode run_mode;
-        unsigned short port = 7000, socks5_port = 7001;
+        unsigned short port = 7000;
         std::string connect, exp, bind;
-        bool run_socks5_server = false;
+        std::unique_ptr<pika::lib::tcp::socket> socks5_server_endpoint_socket = nullptr;
         boost::asio::io_context io_context;
 
         po::options_description desc("Options");
@@ -54,12 +54,11 @@ int main(int argc, char *argv[])
             if (not vm.count("export"))
             {
                 std::cout << "[export mode] --export not present, using internal socks5 server\n";
-                pika::lib::tcp::socket socket{io_context, {pika::lib::tcp::v4(), 0}};
-                socks5_port = socket.local_endpoint().port();
+                socks5_server_endpoint_socket = std::make_unique<pika::lib::tcp::socket>(io_context,
+                                                                                         pika::lib::tcp::endpoint{pika::lib::tcp::v4(), 0});
 
                 using namespace std::literals;
-                exp = "0.0.0.0:"s + std::to_string(socks5_port);
-                run_socks5_server = true;
+                exp = "0.0.0.0:"s + std::to_string(socks5_server_endpoint_socket->local_endpoint().port());
             }
             else
                 exp = vm["export"].as<std::string>();
@@ -78,13 +77,17 @@ int main(int argc, char *argv[])
             }
             case mode::exp:
             {
-                if (run_socks5_server)
+                // if socks5_server_endpoint_socket not null, start socks5 server
+                if (socks5_server_endpoint_socket)
                 {
                     std::thread t(
-                        [&socks5_port]()
+                        [socket = std::move(socks5_server_endpoint_socket)]() mutable
                         {
-                            std::cout << "Starting socks5 server at localhost:" << socks5_port << "\n";
-                            pika::socks5::server server{socks5_port};
+                            // retrive the random port from socket, release it, than bind it again
+                            unsigned short port = socket->local_endpoint().port();
+                            std::cout << "Starting socks5 server at localhost:" << port << "\n";
+                            socket.reset();
+                            pika::socks5::server server{port};
                             boost::asio::io_context io;
                             pika::lib::co_spawn(io,
                                                 [&server] {
