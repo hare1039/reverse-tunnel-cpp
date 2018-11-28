@@ -11,10 +11,11 @@ int main(int argc, char *argv[])
         namespace po = boost::program_options;
         enum class mode {
             srv,
-            exp
+            exp,
+            socks5
         };
         mode run_mode;
-        unsigned short port = 7000;
+        unsigned short port = 7000, socks5_port = 7000;
         std::string connect, exp, bind;
         std::unique_ptr<pika::lib::tcp::socket> socks5_server_endpoint_socket = nullptr;
         boost::asio::io_context io_context;
@@ -25,7 +26,8 @@ int main(int argc, char *argv[])
             ("port,p",    po::value<unsigned short>(&port)->default_value(7000), "[server mode] listen port")
             ("connect,c", po::value<std::string>(), "[export mode] connect to server")
             ("export,e",  po::value<std::string>(), "[export mode] export server endpoint")
-            ("bind,b",    po::value<std::string>(), "[export mode] bind remote server");
+            ("bind,b",    po::value<std::string>(), "[export mode] bind remote server")
+            ("socks5,s",  po::value<unsigned short>(&socks5_port)->default_value(7000), "[socks5 mode] start socks5 server on this port");
         po::positional_options_description pos_po;
         po::variables_map vm;
 
@@ -36,9 +38,10 @@ int main(int argc, char *argv[])
         po::notify(vm);
         if (vm.count("connect") || vm.count("export") || vm.count("bind"))
             run_mode = mode::exp;
+        else if (vm.count("socks5"))
+            run_mode = mode::socks5;
         else
             run_mode = mode::srv;
-
 
         if (run_mode == mode::exp)
         {
@@ -69,11 +72,25 @@ int main(int argc, char *argv[])
 
         switch (run_mode)
         {
+            case mode::socks5:
+            {
+                std::cout << "[socks5 mode] Starting socks5 server at localhost:" << socks5_port << "\n";
+
+                pika::socks5::server server{socks5_port};
+                boost::asio::io_context io;
+                pika::lib::co_spawn(io,
+                                    [&server] {
+                                        return server.run();
+                                    }, pika::lib::detached);
+                io.run();
+                break;
+            }
             case mode::srv:
             {
                 pika::controller server{port};
                 pika::lib::co_spawn(io_context, [&server]{ return server.run(); }, pika::lib::detached);
                 io_context.run();
+                break;
             }
             case mode::exp:
             {
@@ -103,6 +120,7 @@ int main(int argc, char *argv[])
                                         return c->run(connect, bind);
                                     }, pika::lib::detached);
                 io_context.run();
+                break;
             }
         }
 //        std::vector<std::thread> p(std::thread::hardware_concurrency());
