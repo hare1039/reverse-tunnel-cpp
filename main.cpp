@@ -75,14 +75,12 @@ int main(int argc, char *argv[])
             case mode::socks5:
             {
                 std::cout << "[socks5 mode] Starting socks5 server at localhost:" << socks5_port << "\n";
-
                 pika::socks5::server server{socks5_port};
-                boost::asio::io_context io;
-                pika::lib::co_spawn(io,
+                pika::lib::co_spawn(io_context,
                                     [&server] {
                                         return server.run();
                                     }, pika::lib::detached);
-                io.run();
+                io_context.run();
                 break;
             }
             case mode::srv:
