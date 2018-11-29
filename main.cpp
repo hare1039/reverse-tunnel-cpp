@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
             socks5
         };
         mode run_mode;
-        unsigned short port = 7000, socks5_port = 7000;
+        unsigned short port = 7000, socks5_port = 0;
         std::string connect, exp, bind;
         std::unique_ptr<pika::lib::tcp::socket> socks5_server_endpoint_socket = nullptr;
         boost::asio::io_context io_context;
@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
             ("connect,c", po::value<std::string>(), "[export mode] connect to server")
             ("export,e",  po::value<std::string>(), "[export mode] export server endpoint")
             ("bind,b",    po::value<std::string>(), "[export mode] bind remote server")
-            ("socks5,s",  po::value<unsigned short>(&socks5_port)->default_value(7000), "[socks5 mode] start socks5 server on this port");
+            ("socks5,s",  po::value<unsigned short>(), "[socks5 mode] start socks5 server on this port");
         po::positional_options_description pos_po;
         po::variables_map vm;
 
@@ -37,14 +37,8 @@ int main(int argc, char *argv[])
                   vm);
         po::notify(vm);
         if (vm.count("connect") || vm.count("export") || vm.count("bind"))
-            run_mode = mode::exp;
-        else if (vm.count("socks5"))
-            run_mode = mode::socks5;
-        else
-            run_mode = mode::srv;
-
-        if (run_mode == mode::exp)
         {
+            run_mode = mode::exp;
             if ((!! vm.count("connect")) ^ (!! vm.count("bind")))
             {
                 std::cerr << "[export mode] --connect and and --bind must spectify at the same time\n";
@@ -66,6 +60,13 @@ int main(int argc, char *argv[])
             else
                 exp = vm["export"].as<std::string>();
         }
+        else if (vm.count("socks5"))
+        {
+            run_mode = mode::socks5;
+            socks5_port = vm["socks5"].as<unsigned short>();
+        }
+        else
+            run_mode = mode::srv;
 
         boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
         signals.async_wait([&](auto, auto){ io_context.stop(); });
