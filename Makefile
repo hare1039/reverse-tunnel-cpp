@@ -1,11 +1,22 @@
 CXX ?= clang++
 
-ALL:
-	$(CXX) *.cpp -glldb -o run -std=c++17 -fcoroutines-ts -lboost_program_options -lboost_system
-
 .PHONY: release debug
 release:
-	$(CXX) *.cpp -o release -std=c++17 -fcoroutines-ts -lboost_program_options -lboost_system -O3 -DNDEBUG
+	mkdir -p build && \
+    cd build       && \
+    conan install .. --profile ../profiles/release && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build .
 
 debug:
-	$(CXX) *.cpp -glldb -o run -std=c++17 -fcoroutines-ts -lboost_program_options -lboost_system
+	mkdir -p build && \
+    cd build       && \
+    conan install .. --profile ../profiles/debug && \
+    cmake .. -DCMAKE_BUILD_TYPE=Debug && \
+    cmake --build .
+
+clean:
+	rm -rf build
+
+lldb:
+	$(CXX) *.cpp -glldb -o lldb -std=c++17 -fcoroutines-ts -lboost_program_options -lboost_system
