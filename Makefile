@@ -1,6 +1,6 @@
 CXX ?= clang++
 
-.PHONY: release debug
+.PHONY: release debug lldb
 release:
 	mkdir -p build && \
     cd build       && \
@@ -8,12 +8,8 @@ release:
     cmake .. -DCMAKE_BUILD_TYPE=Release && \
     cmake --build .
 
-debug:
-	mkdir -p build && \
-    cd build       && \
-    conan install .. --profile ../profiles/debug && \
-    cmake .. -DCMAKE_BUILD_TYPE=Debug && \
-    cmake --build .
+debug: lldb
+	echo launching raw
 
 clean:
 	rm -rf build

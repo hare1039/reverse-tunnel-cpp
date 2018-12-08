@@ -14,13 +14,13 @@ int main(int argc, char *argv[])
             exp,
             socks5
         };
-        mode run_mode;
-        unsigned short port = 7000, socks5_port = 0;
+        mode run_mode {mode::srv};
+        unsigned short port {7000}, socks5_port {0};
         std::string connect, exp, bind;
-        std::unique_ptr<pika::lib::tcp::socket> socks5_server_endpoint_socket = nullptr;
+        std::unique_ptr<pika::lib::tcp::socket> socks5_server_endpoint_socket {nullptr};
         boost::asio::io_context io_context;
 
-        po::options_description desc("Options");
+        po::options_description desc{"Options"};
         desc.add_options()
             ("help,h", "Print this help messages")
             ("port,p",    po::value<unsigned short>(&port)->default_value(7000), "[server mode] listen port")
@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
         else
             run_mode = mode::srv;
 
-        boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
+        boost::asio::signal_set signals{io_context, SIGINT, SIGTERM};
         signals.async_wait([&](auto, auto){ io_context.stop(); });
 
         switch (run_mode)
