@@ -17,12 +17,15 @@ public:
     client(std::string_view export_host, boost::asio::io_context &io_context):
         export_ep_{util::make_connectable(export_host, io_context)} {}
 
-    lib::awaitable<void> run(std::string_view controller_host, std::string_view controller_bind)
+    lib::awaitable<void> run(std::string_view controller_host,
+                             std::string_view controller_bind,
+                             error::restart_request &req)
     {
+        auto executor = co_await lib::this_coro::executor();
+        auto token    = co_await lib::this_coro::token();
+
         try
         {
-            auto executor = co_await lib::this_coro::executor();
-            auto token    = co_await lib::this_coro::token();
             auto self     = shared_from_this();
 
             self->controller_ep_ = util::make_connectable(controller_host, executor.context());
@@ -47,31 +50,51 @@ public:
                 std::array<std::uint8_t, 8> buf{};
                 std::size_t length = co_await boost::asio::async_read(controller_socket, boost::asio::buffer(buf), token);
 
-                switch(buf.at(0))
+                if (buf.at(1) != 0)
                 {
-                    case 0x00: // do nothing
-                        break;
-                    case 0x03: // Is remote request
+                    std::cout << "Error connecting to remote server\n";
+                    using namespace std::chrono_literals;
+                    throw error::restart_request{1s};
+                }
+                else
+                {
+                    switch(buf.at(0))
                     {
-                        std::uint32_t id = 0;
-                        std::memcpy(&id, &buf[2], 4);
-                        lib::co_spawn(executor,
-                                      [self, id]() mutable {
-                                          return self->make_bridge(id);
-                                      }, lib::detached);
-                        break;
+                        case 0x00: // do nothing
+                            break;
+                        case 0x02: // Is remote request
+                        {
+                            std::uint32_t id = 0;
+                            std::memcpy(&id, &buf[2], 4);
+                            lib::co_spawn(executor,
+                                          [self, id]() mutable {
+                                              return self->make_bridge(id);
+                                          }, lib::detached);
+                            break;
+                        }
+                        default:
+                            // response failed
+                            break;
                     }
-                    default:
-                        // response failed
-                        break;
-                    }
+                }
             }
-
+        }
+        catch (error::restart_request const & e)
+        {
+            std::cerr << "client restart exception, restarting\n";
+            executor.context().stop();
+            req = e;
+            co_return;
         }
         catch (std::exception const & e)
         {
-            std::cerr << "session::start() exception: " << e.what() << std::endl;
+            std::cerr << "client::start() exception: " << e.what() << std::endl;
+            executor.context().stop();
         }
+
+        // this is temparary
+        using namespace std::chrono_literals;
+        req = error::restart_request{1s};
     }
 
     lib::awaitable<void> make_bridge(std::uint32_t const id)

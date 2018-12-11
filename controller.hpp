@@ -76,8 +76,12 @@ private:
                 break;
             }
             default:
+            {
                 // response failed
+                std::array<std::uint8_t, 8> response{0x00 /* CONNECT */, 0x01 /* FAILED */};
+                std::ignore = co_await boost::asio::async_write(socket, boost::asio::buffer(response), token);
                 break;
+            }
         }
     }
 
@@ -107,7 +111,7 @@ private:
                 std::uint32_t address   = util::hash(socket.remote_endpoint());
                 clients.insert({address, std::move(socket)});
 
-                std::array<std::uint8_t, 8> response{0x03};
+                std::array<std::uint8_t, 8> response{0x02};
                 boost::endian::native_to_big_inplace(address);
                 std::memcpy(&response[2], &address, sizeof address);
 
@@ -116,6 +120,8 @@ private:
         }
         catch (std::exception const & e)
         {
+            std::array<std::uint8_t, 8> response{0x02 /* CONNECT */, 0x01 /* FAILED */};
+            std::ignore = co_await boost::asio::async_write(remote_socket, boost::asio::buffer(response), token);
             std::cerr << "controller::start_reverse_tunnel exception: " << e.what() << std::endl;
         }
     }

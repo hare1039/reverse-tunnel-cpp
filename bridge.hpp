@@ -19,14 +19,16 @@ public:
         auto self     = shared_from_this();
         auto executor = co_await lib::this_coro::executor();
 
-        lib::co_spawn(executor, [self]() mutable {
-                return self->redir(self->first_socket_,
-                                   self->second_socket_);
-            }, lib::detached);
-        lib::co_spawn(executor, [self]() mutable {
-                return self->redir(self->second_socket_,
-                                   self->first_socket_);
-            }, lib::detached);
+        lib::co_spawn(executor,
+                      [self]() mutable {
+                          return self->redir(self->first_socket_,
+                                             self->second_socket_);
+                      }, lib::detached);
+        lib::co_spawn(executor,
+                      [self]() mutable {
+                          return self->redir(self->second_socket_,
+                                             self->first_socket_);
+                      }, lib::detached);
     }
 
 private:

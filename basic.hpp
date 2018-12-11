@@ -7,6 +7,7 @@
 #include <boost/endian/conversion.hpp>
 #include <boost/asio.hpp>
 #include <boost/scope_exit.hpp>
+#include <chrono>
 
 namespace pika
 {
@@ -56,6 +57,26 @@ lib::tcp::endpoint make_connectable(std::string_view host, boost::asio::io_conte
 }
 
 }// namespace util
+
+namespace error
+{
+    using namespace std::chrono_literals;
+    class restart_request : public std::exception
+    {
+        constexpr static std::chrono::seconds max_waittime_ {600s};
+        std::chrono::seconds waittime_ {600s};
+        bool empty_ {true};
+    public:
+        restart_request() = default;
+        restart_request(std::chrono::seconds time):
+            waittime_{(time > max_waittime_? max_waittime_ : time)},
+            empty_{false} {}
+
+        virtual char const * what() const noexcept override { return "Restart Requested\n"; }
+        void sleep() const {std::this_thread::sleep_for(waittime_);}
+        operator bool() {return not empty_;};
+    };
+} // namespace error
 
 }// namespace pika
 

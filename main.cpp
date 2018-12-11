@@ -70,65 +70,75 @@ int main(int argc, char *argv[])
         boost::asio::signal_set signals{io_context, SIGINT, SIGTERM};
         signals.async_wait([&](auto, auto){ io_context.stop(); });
 
-        switch (run_mode)
+        bool restart{true};
+        while (restart)
         {
-            case mode::socks5:
+            pika::error::restart_request req;
+            restart = false;
+
+            switch (run_mode)
             {
-                std::cout << "[socks5 mode] ";
-                pika::socks5::server server{socks5_listen_host, io_context};
-                pika::lib::co_spawn(io_context,
-                                    [&server] {
-                                        return server.run();
-                                    }, pika::lib::detached);
-                io_context.run();
-                break;
-            }
-            case mode::srv:
-            {
-                pika::controller server{srv_listen_host, io_context};
-                pika::lib::co_spawn(io_context,
-                                    [&server] {
-                                        return server.run();
-                                    }, pika::lib::detached);
-                io_context.run();
-                break;
-            }
-            case mode::exp:
-            {
-                // if socks5_server_endpoint_socket not null, start socks5 server
-                if (socks5_server_endpoint_socket)
+                case mode::socks5:
                 {
-                    std::thread t(
-                        [socket = std::move(socks5_server_endpoint_socket), &export_host]() mutable
-                        {
-                            // retrive the random port from socket, release it, than bind it again
-                            using namespace std::literals;
-                            std::cout << "Starting socks5 server at " << export_host << "\n";
-                            socket.reset();
-                            boost::asio::io_context io;
-                            pika::socks5::server server {export_host, io};
-                            pika::lib::co_spawn(io,
-                                                [&server] {
-                                                    return server.run();
-                                                }, pika::lib::detached);
-                            io.run();
-                        });
-                    t.detach();
+                    std::cout << "[socks5 mode] ";
+                    pika::socks5::server server{socks5_listen_host, io_context};
+                    pika::lib::co_spawn(io_context,
+                                        [&server] {
+                                            return server.run();
+                                        }, pika::lib::detached);
+                    io_context.run();
+                    break;
                 }
-                auto c = std::make_shared<pika::client>(export_host, io_context);
-                pika::lib::co_spawn(io_context,
-                                    [&c, &connect_host, &bind_host] {
-                                        return c->run(connect_host, bind_host);
-                                    }, pika::lib::detached);
-                io_context.run();
-                break;
+                case mode::srv:
+                {
+                    pika::controller server{srv_listen_host, io_context};
+                    pika::lib::co_spawn(io_context,
+                                        [&server] {
+                                            return server.run();
+                                        }, pika::lib::detached);
+                    io_context.run();
+                    break;
+                }
+                case mode::exp:
+                {
+                    // if socks5_server_endpoint_socket not null, start socks5 server
+                    if (socks5_server_endpoint_socket)
+                    {
+                        std::thread t(
+                            [socket = std::move(socks5_server_endpoint_socket), &export_host]() mutable
+                            {
+                                // retrive the random port from socket, release it, than bind it again
+                                using namespace std::literals;
+                                std::cout << "Starting socks5 server at " << export_host << "\n";
+                                socket.reset();
+                                boost::asio::io_context io;
+                                pika::socks5::server server {export_host, io};
+                                pika::lib::co_spawn(io,
+                                                    [&server] {
+                                                        return server.run();
+                                                    }, pika::lib::detached);
+                                io.run();
+                            });
+                        t.detach();
+                    }
+                    auto c = std::make_shared<pika::client>(export_host, io_context);
+                    pika::lib::co_spawn(io_context,
+                                        [&c, &connect_host, &bind_host, &req] {
+                                            return c->run(connect_host, bind_host, req);
+                                        }, pika::lib::detached);
+                    io_context.run();
+                    break;
+                }
+            }
+
+            if (req)
+            {
+                io_context.restart();
+                std::cout << "Retrying ... first sleep.\n";
+                req.sleep();
+                restart = true;
             }
         }
-//        std::vector<std::thread> p(std::thread::hardware_concurrency());
-//        for (std::thread & t : p)
-//            t = std::thread ([&io_context]{ io_context.run(); });
-//        for (std::thread & t : p)
-//            t.join();
     }
     catch (const std::exception& e)
     {
