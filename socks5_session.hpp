@@ -34,9 +34,6 @@ public:
             auto token    = co_await lib::this_coro::token();
             auto executor = co_await lib::this_coro::executor();
 
-            BOOST_SCOPE_EXIT (self) {
-                std::cout << "socks5 session #" << self->id() << " closed" << std::endl;
-            } BOOST_SCOPE_EXIT_END;
 
             { // socks5 handshake
                 /*
@@ -165,7 +162,6 @@ public:
                         throw std::runtime_error("ATYP not supported");
                 }
                 std::cout << "socks5 session #" << self->id() << " started with target endpoint: " << target_endpoint << "\n";
-
             } // socks5 request end
 
             { // response of socks5 request

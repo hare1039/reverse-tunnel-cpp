@@ -15,19 +15,18 @@ int main(int argc, char *argv[])
             socks5
         };
         mode run_mode {mode::srv};
-        unsigned short port {7000}, socks5_port {0};
-        std::string connect, exp, bind;
+        std::string srv_listen_host, socks5_listen_host, connect_host, export_host, bind_host;
         std::unique_ptr<pika::lib::tcp::socket> socks5_server_endpoint_socket {nullptr};
         boost::asio::io_context io_context;
 
         po::options_description desc{"Options"};
         desc.add_options()
             ("help,h", "Print this help messages")
-            ("port,p",    po::value<unsigned short>(&port)->default_value(7000), "[server mode] listen port")
+            ("srv",    po::value<std::string>(&srv_listen_host)->default_value(":7000"), "[server mode] listen port")
             ("connect,c", po::value<std::string>(), "[export mode] connect to server")
             ("export,e",  po::value<std::string>(), "[export mode] export server endpoint")
             ("bind,b",    po::value<std::string>(), "[export mode] bind remote server")
-            ("socks5,s",  po::value<unsigned short>(), "[socks5 mode] start socks5 server on this port");
+            ("socks5,s",  po::value<std::string>(), "[socks5 mode] start socks5 server on this port");
         po::positional_options_description pos_po;
         po::variables_map vm;
 
@@ -45,8 +44,8 @@ int main(int argc, char *argv[])
                 std::exit(1);
             }
 
-            connect = vm["connect"].as<std::string>();
-            bind    = vm["bind"].as<std::string>();
+            connect_host = vm["connect"].as<std::string>();
+            bind_host    = vm["bind"].as<std::string>();
 
             if (not vm.count("export"))
             {
@@ -55,15 +54,15 @@ int main(int argc, char *argv[])
                                                                                          pika::lib::tcp::endpoint{pika::lib::tcp::v4(), 0});
 
                 using namespace std::literals;
-                exp = "0.0.0.0:"s + std::to_string(socks5_server_endpoint_socket->local_endpoint().port());
+                export_host = "127.0.0.1:"s + std::to_string(socks5_server_endpoint_socket->local_endpoint().port());
             }
             else
-                exp = vm["export"].as<std::string>();
+                export_host = vm["export"].as<std::string>();
         }
         else if (vm.count("socks5"))
         {
             run_mode = mode::socks5;
-            socks5_port = vm["socks5"].as<unsigned short>();
+            socks5_listen_host = vm["socks5"].as<std::string>();
         }
         else
             run_mode = mode::srv;
@@ -75,8 +74,8 @@ int main(int argc, char *argv[])
         {
             case mode::socks5:
             {
-                std::cout << "[socks5 mode] Starting socks5 server at localhost:" << socks5_port << "\n";
-                pika::socks5::server server{socks5_port};
+                std::cout << "[socks5 mode] ";
+                pika::socks5::server server{socks5_listen_host, io_context};
                 pika::lib::co_spawn(io_context,
                                     [&server] {
                                         return server.run();
@@ -86,8 +85,11 @@ int main(int argc, char *argv[])
             }
             case mode::srv:
             {
-                pika::controller server{port};
-                pika::lib::co_spawn(io_context, [&server]{ return server.run(); }, pika::lib::detached);
+                pika::controller server{srv_listen_host, io_context};
+                pika::lib::co_spawn(io_context,
+                                    [&server] {
+                                        return server.run();
+                                    }, pika::lib::detached);
                 io_context.run();
                 break;
             }
@@ -97,14 +99,14 @@ int main(int argc, char *argv[])
                 if (socks5_server_endpoint_socket)
                 {
                     std::thread t(
-                        [socket = std::move(socks5_server_endpoint_socket)]() mutable
+                        [socket = std::move(socks5_server_endpoint_socket), &export_host]() mutable
                         {
                             // retrive the random port from socket, release it, than bind it again
-                            unsigned short port = socket->local_endpoint().port();
-                            std::cout << "Starting socks5 server at localhost:" << port << "\n";
+                            using namespace std::literals;
+                            std::cout << "Starting socks5 server at " << export_host << "\n";
                             socket.reset();
-                            pika::socks5::server server{port};
                             boost::asio::io_context io;
+                            pika::socks5::server server {export_host, io};
                             pika::lib::co_spawn(io,
                                                 [&server] {
                                                     return server.run();
@@ -113,10 +115,10 @@ int main(int argc, char *argv[])
                         });
                     t.detach();
                 }
-                auto c = std::make_shared<pika::client>(exp, io_context);
+                auto c = std::make_shared<pika::client>(export_host, io_context);
                 pika::lib::co_spawn(io_context,
-                                    [&c, &connect, &bind] {
-                                        return c->run(connect, bind);
+                                    [&c, &connect_host, &bind_host] {
+                                        return c->run(connect_host, bind_host);
                                     }, pika::lib::detached);
                 io_context.run();
                 break;

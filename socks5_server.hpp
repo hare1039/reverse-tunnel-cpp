@@ -12,19 +12,19 @@ namespace pika::socks5
 
 class server
 {
-    unsigned short listen_port_ = 7000;
+    lib::tcp::endpoint listen_ep_;
     lib::tcp::resolver::results_type target_server_ep_;
 public:
-    server(unsigned short port):
-        listen_port_{port} {}
+    server(std::string_view listen_host, boost::asio::io_context &io_context):
+        listen_ep_{util::make_connectable(listen_host, io_context)} {}
 
     lib::awaitable<void> run()
     {
         auto executor = co_await lib::this_coro::executor();
         auto token    = co_await lib::this_coro::token();
 
-        lib::tcp::acceptor acceptor(executor.context(), {lib::tcp::v4(), listen_port_});
-        std::cout << "socks5 server start listining on " << listen_port_ << "\n";
+        lib::tcp::acceptor acceptor{executor.context(), listen_ep_};
+        std::cout << "socks5 server start listining on " << listen_ep_ << "\n";
         for (;;)
         {
             lib::tcp::socket socket = co_await acceptor.async_accept(token);

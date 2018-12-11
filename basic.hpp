@@ -50,6 +50,8 @@ lib::tcp::endpoint make_connectable(std::string_view host, boost::asio::io_conte
     std::string_view server_port = host.substr(std::distance(host.begin(), it) + 1, std::distance(it, host.end()) - 1);
 
     lib::tcp::resolver resolver{io_context};
+    if (server_host.empty())
+        server_host = "0.0.0.0";
     return *resolver.resolve(server_host, server_port);
 }
 
