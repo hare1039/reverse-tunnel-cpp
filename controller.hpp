@@ -162,6 +162,7 @@ private:
             controller * self = this;
             BOOST_SCOPE_EXIT (self, id) {
                 self->clients.erase(id);
+                std::cout << "end start_bridge, left: " << self->clients.size() << std::endl;
             } BOOST_SCOPE_EXIT_END;
             co_await b->start_transport();
         }
