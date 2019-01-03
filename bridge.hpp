@@ -56,8 +56,8 @@ private:
             std::cerr << "bridge::redir() std exception: " << e.what() << std::endl;
         }
         boost::system::error_code ec;
-        from.shutdown(lib::tcp::socket::shutdown_receive, ec);
-        to.shutdown(lib::tcp::socket::shutdown_send, ec);
+        from.shutdown(lib::tcp::socket::shutdown_both, ec);
+        to.shutdown(lib::tcp::socket::shutdown_both, ec);
         co_return;
     }
 };
