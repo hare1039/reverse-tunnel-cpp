@@ -155,7 +155,7 @@ public:
                     {
                         // version-4 IP address, with a length of 16 octets
                         std::array<std::uint8_t, 16 + port_length> buf{};
-                        std::cout << "IP v6 not impl\n";
+                        std::cerr << "IP v6 not impl\n";
                         [[fallthrough]];
                     }
                     default:
