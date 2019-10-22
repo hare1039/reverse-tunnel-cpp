@@ -5,14 +5,16 @@ This project is only a proof of concept, which is not suitable for running for a
 Please use [frp](https://github.com/fatedier/frp). It is better documented, and the features are much more richer than this project.
 
 The command option are:
+
 ```
-    ("help,h",    "Print this help messages")
-    ("srv",       po::value<std::string>(&srv_listen_host)->default_value(":7000"), "[server mode] listen port")
-    ("connect,c", po::value<std::string>(), "[export mode] connect to server")
-    ("export,e",  po::value<std::string>(), "[export mode] export server endpoint")
-    ("bind,b",    po::value<std::string>(), "[export mode] bind remote server")
-    ("socks5,s",  po::value<std::string>(), "[socks5 mode] start socks5 server on this port");
+--help, -h      Print this help messages
+--srv           [server mode] listen port, default value: 7000.
+--connect, -c   [export mode] connect to server.
+--export, -e    [export mode] export server endpoint.
+--bind, -b      [export mode] bind remote server.
+--socks5, -s    [socks5 mode] start socks5 server on this port.
 ```
+
 
 For example:
 ```
